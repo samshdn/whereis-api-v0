@@ -1,4 +1,6 @@
-import axios from "axios";
+// import axios from "axios";
+import axios from "https://cdn.skypack.dev/axios";
+
 import { createHash } from "node:crypto";
 
 export class SfEx {
