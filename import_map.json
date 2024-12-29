@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "axios": "https://cdn.skypack.dev/axios"
+  }
+}
