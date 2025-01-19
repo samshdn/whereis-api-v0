@@ -1,4 +1,5 @@
 import axios from "axios";
+import {logger} from "./logger.ts";
 
 export class FedEx {
     // keep the last token & expire time
@@ -43,7 +44,7 @@ export class FedEx {
         }
     }
 
-    static async getRoute(trackingNumber: string): Promise<JSON> {
+    static async getRoute(trackingNumber: string): Promise<Record<string, any>> {
         try {
             // Prepare the request payload
             const payload = {
@@ -70,10 +71,9 @@ export class FedEx {
             });
 
             return response.data;
-            // console.log("Shipment Details:", JSON.stringify(response.data));
         } catch (error) {
-            console.error("Error fetching shipment details:", error);
+            logger.error("Error fetching shipment details:", error);
+            throw error;
         }
-        return JSON.parse("{}");
     }
 }

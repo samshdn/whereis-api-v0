@@ -1,11 +1,12 @@
-import { Context, Hono } from "hono";
+import { Hono } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
-import { SfEx } from "./sfEx.ts";
-import { FedEx } from "./fedEx.ts";
-import {
-    BlankEnv,
-    BlankInput,
-} from "https://jsr.io/@hono/hono/4.6.12/src/types.ts";
+
+import { dbPool } from "./dbUtil.ts";
+import { logger } from "./logger.ts";
+import { requestWhereIs } from "./gateway.ts";
+
+import { Entity, ETrackingNum } from "./model.ts";
+import { insertEntity, queryEntity } from "./dbOp.ts";
 
 export class Server {
     private readonly port: number;
@@ -21,7 +22,6 @@ export class Server {
             "/v0/*/:id",
             bearerAuth({
                 verifyToken: async (token: string, c) => {
-                    console.log(token);
                     return token === "eagle1";
                 },
             }),
@@ -34,17 +34,49 @@ export class Server {
         });
 
         app.get("/v0/whereis/:id", async (c) => {
+            // Carrier-TrackingNumber
             const id = c.req.param("id");
-            const arr = id.split("-");
-            if (arr.length !== 2) {
-                return c.notFound();
+            const eTrackingNum = ETrackingNum.parse(id);
+            if (eTrackingNum === undefined) {
+                return c.text("Invalid request: url string", 400);
             }
 
-            return this.whereIs(c, arr[0], arr[1]);
+            let entity: Entity | undefined = await this.loadEntityFromDB(id);
+            if (entity !== undefined) {
+                return c.json(entity);
+            }
+
+            const urlString = c.req.url; // get the full url string
+            const url = new URL(urlString);
+            const queryParams = Object.fromEntries(url.searchParams.entries());
+
+            entity = await requestWhereIs(eTrackingNum, queryParams);
+            if (entity === undefined) {
+                return c.notFound();
+            } else {
+                await this.saveEntityToDB(entity);
+            }
+            return c.json(entity);
+        });
+
+        app.get("/dbaction", async (c) => {
+            let result;
+            // Init db client
+            try {
+                using client = await dbPool.connect();
+                result = await client.queryArray`SELECT now()`;
+            } catch (error) {
+                logger.error(`Database operation failed: ${error}`);
+            }
+            if (result === undefined) {
+                c.notFound();
+            } else {
+                return c.text(String(result.rows[0][0]));
+            }
         });
 
         app.get("/", (c) => {
-            return c.text("Hello Hono!");
+            return c.html("<h3>Hello Eegle1!</h3>");
         });
 
         Deno.serve({ port: this.port }, app.fetch);
@@ -54,23 +86,41 @@ export class Server {
         console.log(`Server is stopping...`);
     }
 
-    async whereIs(
-        c,
-        id1: string,
-        id2: string,
-    ): Promise<void> {
+    async loadEntityFromDB(eagle1TrackingNum: string) {
+        let client;
+        let entity: Entity | undefined;
+        try {
+            client = await dbPool.connect();
+            // try to load from database first
+            entity = await queryEntity(client, eagle1TrackingNum);
+        } catch (error) {
+            logger.error(error);
+        } finally {
+            if (client) {
+                client.release();
+            }
+        }
+        return entity;
+    }
+
+    async saveEntityToDB(entity: Entity): Promise<number | undefined> {
+        let client;
         let result;
-        if ("sfex" === id1) {
-            const array = id2.split("_");
-            result = await SfEx.getRoute(array[0], array[1]);
-        } else if ("fden" === id1) {
-            result = await FedEx.getRoute(id2);
-            console.log(result);
+        try {
+            client = await dbPool.connect();
+            client.queryObject("BEGIN");
+            result = await insertEntity(client, entity);
+            client.queryObject("COMMIT");
+        } catch (error) {
+            logger.error(error);
+            if (client) {
+                client.queryObject("ROLLBACK");
+            }
+        } finally {
+            if (client) {
+                client.release();
+            }
         }
-        if (result !== undefined) {
-            return c.json(result);
-        } else {
-            return c.notFound();
-        }
+        return result;
     }
 }

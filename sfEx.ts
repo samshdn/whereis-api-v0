@@ -1,7 +1,7 @@
-// import axios from "axios";
-import axios from "https://cdn.skypack.dev/axios";
+import axios from "axios";
 
 import { createHash } from "node:crypto";
+import {logger} from "./logger.ts";
 
 export class SfEx {
     /**
@@ -30,7 +30,7 @@ export class SfEx {
     static async getRoute(
         trackingNumber: string,
         phoneNo: string,
-    ): Promise<JSON> {
+    ): Promise<Record<string, any>> {
         // live
         const SF_EXPRESS_API_URL = Deno.env.get("SF_EXPRESS_API_URL") ?? "";
         const SF_Express_PartnerID = Deno.env.get("SF_EXPRESS_PartnerID") ?? "";
@@ -64,9 +64,8 @@ export class SfEx {
             });
 
             return response.data;
-            // console.log("Shipment Details:", response.data);
         } catch (error) {
-            console.error("Error fetching shipment details:", error);
+            logger.error("Error fetching shipment details:", error);
             throw error;
         }
     }
