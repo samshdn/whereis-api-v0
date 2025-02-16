@@ -1,12 +1,17 @@
 import { Hono } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
+import { QueryArrayResult } from "https://deno.land/x/postgres/mod.ts";
 
 import { dbPool } from "./dbUtil.ts";
 import { logger } from "./logger.ts";
 import { requestWhereIs } from "./gateway.ts";
-
-import { Entity, ETrackingNum } from "./model.ts";
-import { insertEntity, queryEntity } from "./dbOp.ts";
+import { Entity, TrackingID } from "./model.ts";
+import {
+    insertEntity,
+    queryEntity,
+    queryEventIds,
+    updateEntity,
+} from "./dbOp.ts";
 
 export class Server {
     private readonly port: number;
@@ -36,31 +41,92 @@ export class Server {
         app.get("/v0/whereis/:id", async (c) => {
             // Carrier-TrackingNumber
             const id = c.req.param("id");
-            const eTrackingNum = ETrackingNum.parse(id);
-            if (eTrackingNum === undefined) {
+            const trackingID = TrackingID.parse(id);
+            if (trackingID == undefined) {
                 return c.text("Invalid request: url string", 400);
             }
 
-            let entity: Entity | undefined = await this.loadEntityFromDB(id);
-            if (entity !== undefined) {
-                return c.json(entity);
-            }
+            // get the full url string
+            let entity: Entity | undefined;
+            const fullData: boolean = "true" == c.req.param("fulldata");
+            const queryParams = this.getExtraParams(c.req, trackingID.carrier);
+            if (c.req.param("refresh") === undefined) {
+                let client;
+                try {
+                    client = await dbPool.connect();
 
-            const urlString = c.req.url; // get the full url string
-            const url = new URL(urlString);
-            const queryParams = Object.fromEntries(url.searchParams.entries());
+                    // try to load from database first
+                    entity = await queryEntity(client, id);
+                    if (entity !== undefined) {
+                        return c.json(entity.toJSON(fullData));
+                    }
 
-            entity = await requestWhereIs(eTrackingNum, queryParams);
-            if (entity === undefined) {
-                return c.notFound();
+                    entity = await requestWhereIs(
+                        trackingID,
+                        queryParams,
+                        "manual-pull",
+                    );
+                    if (entity === undefined) {
+                        return c.notFound();
+                    }
+
+                    client.queryObject("BEGIN");
+                    await insertEntity(client, entity);
+                    client.queryObject("COMMIT");
+                    return c.json(entity.toJSON(fullData));
+                } catch (error) {
+                    logger.error(error);
+                    if (client) {
+                        client.queryObject("ROLLBACK");
+                    }
+                } finally {
+                    if (client) {
+                        client.release();
+                    }
+                }
             } else {
-                await this.saveEntityToDB(entity);
+                // load from carrier
+                const entity = await requestWhereIs(
+                    trackingID,
+                    queryParams,
+                    "manual-pull",
+                );
+                // case A: the entity can not be found
+                if (entity === undefined) {
+                    return c.notFound();
+                }
+
+                // case B: entity is NOT null, update the routes on-necessary
+                let client;
+                try {
+                    client = await dbPool.connect();
+                    const eventIds: string[] = await queryEventIds(
+                        client,
+                        id,
+                    );
+                    if (entity.eventNum() > eventIds.length) {
+                        // update the entity
+                        client.queryObject("BEGIN");
+                        await updateEntity(client, entity, eventIds);
+                        client.queryObject("COMMIT");
+                    }
+                } catch (error) {
+                    logger.error(error);
+                    if (client) {
+                        client.queryObject("ROLLBACK");
+                    }
+                } finally {
+                    if (client) {
+                        client.release();
+                    }
+                }
+                // send response
+                return c.json(entity.toJSON(fullData));
             }
-            return c.json(entity);
         });
 
         app.get("/dbaction", async (c) => {
-            let result;
+            let result: QueryArrayResult | undefined;
             // Init db client
             try {
                 using client = await dbPool.connect();
@@ -86,41 +152,10 @@ export class Server {
         console.log(`Server is stopping...`);
     }
 
-    async loadEntityFromDB(eagle1TrackingNum: string) {
-        let client;
-        let entity: Entity | undefined;
-        try {
-            client = await dbPool.connect();
-            // try to load from database first
-            entity = await queryEntity(client, eagle1TrackingNum);
-        } catch (error) {
-            logger.error(error);
-        } finally {
-            if (client) {
-                client.release();
-            }
+    getExtraParams(req: any, carrier: string): Record<string, string> {
+        if ("sfex" == carrier) {
+            return { phonenum: req.param("phonenum") };
         }
-        return entity;
-    }
-
-    async saveEntityToDB(entity: Entity): Promise<number | undefined> {
-        let client;
-        let result;
-        try {
-            client = await dbPool.connect();
-            client.queryObject("BEGIN");
-            result = await insertEntity(client, entity);
-            client.queryObject("COMMIT");
-        } catch (error) {
-            logger.error(error);
-            if (client) {
-                client.queryObject("ROLLBACK");
-            }
-        } finally {
-            if (client) {
-                client.release();
-            }
-        }
-        return result;
+        return {};
     }
 }

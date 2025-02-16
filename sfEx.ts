@@ -45,7 +45,7 @@ export class SfEx {
             const msgString = JSON.stringify(msgData);
             const msgDigest = SfEx.generateSignature(
                 msgString,
-                Date.now(),
+                timestamp,
                 SF_Express_CheckWord,
             );
 

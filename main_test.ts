@@ -1,8 +1,7 @@
 import { assert, assertEquals, assertExists, assertFalse } from "@std/assert";
 import { jsonToMd5 } from "./util.ts";
 import {Event} from "./model.ts";
-import {dbPool} from "./db.ts";
-import {isEventIDExist} from "./dbOp.ts";
+import {dbPool} from "./dbUtil.ts";
 import {logger} from "./logger.ts";
 
 Deno.test(async function md5Test() {

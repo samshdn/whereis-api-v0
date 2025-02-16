@@ -31,7 +31,7 @@ export class CodeDesc {
     }
 }
 
-export class ETrackingNum {
+export class TrackingID {
     carrier: string;
     trackingNum: string;
 
@@ -44,10 +44,10 @@ export class ETrackingNum {
         return this.carrier + "-" + this.trackingNum;
     }
 
-    static parse(eagle1TrackingNum: string): ETrackingNum | undefined {
-        const array = eagle1TrackingNum.split("-");
+    static parse(strTrackingID: string): TrackingID | undefined {
+        const array = strTrackingID.split("-");
         if (array.length === 2) {
-            return new ETrackingNum(array[0], array[1]);
+            return new TrackingID(array[0], array[1]);
         } else {
             return undefined;
         }
@@ -59,35 +59,47 @@ export class Entity {
     type?: string;
     origin?: string;
     destination?: string;
-    derived?: boolean;
+    completed?: boolean;
+    dataProvider?: string;
+    extra?: Record<string, any>;
+    requestData?: Record<string, any>;
+    params?: Record<string, any>;
+
     events?: Event[] = [];
-    extA?: Record<string, any>;
-    extB?: Record<string, any>;
-    extC?: Record<string, any>;
 
     constructor(
         id?: string,
         type?: string,
-        origin?: string,
-        destination?: string,
-        extA?: Record<string, any>,
-        extB?: Record<string, any>,
     ) {
         this.id = id;
         this.type = type;
-        this.origin = origin;
-        this.destination = destination;
-        this.extA = extA;
-        this.extB = extB;
     }
 
-    public isDerived() {
-        if (this.events === undefined) return false;
-        for (let i = 0; i < this.events.length; i++) {
-            if (this.events[i].status === 3500) {
-                return true;
+    public toJSON(fullData: boolean = false): Record<string, any> {
+        const entity = {
+            id: this.id,
+            type: this.type,
+            dataProvider: this.dataProvider,
+            ...(this.origin != null && { origin: this.origin }),
+            ...(this.destination != null && { destination: this.destination }),
+            ...(this.extra != null && Object.keys(this.extra).length > 0 &&
+                { extra: this.extra }),
+            ...(this.requestData != null &&
+                Object.keys(this.requestData).length > 0 &&
+                { requestData: this.requestData }),
+        };
+
+        const events = [];
+        if (
+            this.events !== undefined &&
+            Object.keys(this.events).length > 0
+        ) {
+            for (const event of this.events) {
+                events.push(event.toJSON(fullData));
             }
         }
+
+        return { "entity": entity, "events": events };
     }
 
     public eventNum() {
@@ -101,23 +113,54 @@ export class Entity {
         this.events.push(event);
     }
 
-    public getNewEvents(fromNum: number): Event[] | undefined {
+    public lastEvent(): Event | undefined {
+        if (this.events === undefined) return undefined;
 
-        return this.events === undefined
-            ? undefined
-            : this.events.slice(fromNum);
+        return this.events[this.events.length - 1];
+    }
+
+    public lastMajorEvent(): Event | undefined {
+        if (this.events === undefined) return undefined;
+
+        for (let i = this.events.length - 1; i >= 0; i--) {
+            const event = this.events[i];
+            if (event.status !== undefined && event.status % 100 === 0) {
+                return event;
+            }
+        }
+    }
+
+    public lastMinorEvent(): Event | undefined {
+        if (this.events === undefined) return undefined;
+
+        for (let i = this.events.length - 1; i >= 0; i--) {
+            const event = this.events[i];
+            if (event.status !== undefined && event.status % 100 === 50) {
+                return event;
+            }
+        }
+    }
+
+    public isCompleted() {
+        if (this.events === undefined) return false;
+
+        for (let i = this.events.length - 1; i >= 0; i--) {
+            if (this.events[i].status === 3500) {
+                return true;
+            }
+        }
     }
 }
 
 export class Event {
-    eventId: string;
-    trackingNum: string;
+    eventId?: string;
+    trackingNum?: string;
 
-    status: number;
-    what: string;
-    when: string;
-    where: string;
-    whom: string;
+    status?: number;
+    what?: string;
+    when?: string;
+    where?: string;
+    whom?: string;
 
     exceptionCode?: number;
     exceptionDesc?: string;
@@ -126,28 +169,35 @@ export class Event {
     notificationDesc?: string;
     notes?: string;
 
-    extA: Record<string, any>;
-    extB: Record<string, any>;
+    extra?: Record<string, any>;
+    sourceData?: Record<string, any>;
 
-    constructor(
-        eventId: string,
-        trackingNum: string,
-        status: number,
-        what: string,
-        when: string,
-        where: string,
-        whom: string,
-        extA: Record<string, any>,
-        extB: Record<string, any>,
-    ) {
-        this.eventId = eventId;
-        this.trackingNum = trackingNum;
-        this.status = status;
-        this.what = what;
-        this.when = when;
-        this.where = where;
-        this.whom = whom;
-        this.extA = extA;
-        this.extB = extB;
+    public toJSON(fullData: boolean = false): Record<string, any> {
+        const result: Record<string, any> = {
+            eventId: this.eventId,
+            trackingNum: this.trackingNum,
+            status: this.status,
+            what: this.what,
+            when: this.when,
+            where: this.where,
+            whom: this.whom,
+            ...(this.exceptionCode != null &&
+                { exceptionCode: this.exceptionCode }),
+            ...(this.exceptionDesc != null &&
+                { exceptionDesc: this.exceptionDesc }),
+            ...(this.notificationCode != null &&
+                { notificationCode: this.notificationCode }),
+            ...(this.notificationDesc != null &&
+                { notificationDesc: this.notificationDesc }),
+            ...(this.notes != null &&
+                { notes: this.notes }),
+            extra: this.extra,
+        };
+
+        if (fullData) {
+            result["sourceData"] = this.sourceData;
+        }
+
+        return result;
     }
 }
