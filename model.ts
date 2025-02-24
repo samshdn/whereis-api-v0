@@ -55,16 +55,13 @@ export class TrackingID {
 }
 
 export class Entity {
+    uuid?: string;
     id?: string;
     type?: string;
-    origin?: string;
-    destination?: string;
     completed?: boolean;
-    dataProvider?: string;
+    creationTime?: string;
     extra?: Record<string, any>;
-    requestData?: Record<string, any>;
     params?: Record<string, any>;
-
     events?: Event[] = [];
 
     constructor(
@@ -76,17 +73,19 @@ export class Entity {
     }
 
     public toJSON(fullData: boolean = false): Record<string, any> {
-        const entity = {
+        const extra = this.extra;
+        const additional = {
+            ...(extra != null && ("origin" in extra) &&
+                { origin: extra["origin"] }),
+            ...(extra != null && ("destination" in extra) &&
+                { destination: extra["destination"] }),
+        };
+        const object = {
+            uuid: this.uuid,
             id: this.id,
             type: this.type,
-            dataProvider: this.dataProvider,
-            ...(this.origin != null && { origin: this.origin }),
-            ...(this.destination != null && { destination: this.destination }),
-            ...(this.extra != null && Object.keys(this.extra).length > 0 &&
-                { extra: this.extra }),
-            ...(this.requestData != null &&
-                Object.keys(this.requestData).length > 0 &&
-                { requestData: this.requestData }),
+            creationTime: this.getCreationTime(),
+            additional: Object.keys(additional).length > 0 ? additional : undefined,
         };
 
         const events = [];
@@ -99,7 +98,7 @@ export class Entity {
             }
         }
 
-        return { "entity": entity, "events": events };
+        return { "object": object, "events": events };
     }
 
     public eventNum() {
@@ -150,10 +149,17 @@ export class Entity {
             }
         }
     }
+
+    public getCreationTime() {
+        if (this.events === undefined) return "";
+
+        return this.events[0].when;
+    }
 }
 
 export class Event {
     eventId?: string;
+    operatorCode?: string;
     trackingNum?: string;
 
     status?: number;
@@ -162,36 +168,51 @@ export class Event {
     where?: string;
     whom?: string;
 
+    notes?: string;
+    dataProvider?: string;
+
+    lastUpdateMethod?: string;
+    lastUpdateTime?: string;
+    transitMode?: string;
+
     exceptionCode?: number;
     exceptionDesc?: string;
 
     notificationCode?: number;
     notificationDesc?: string;
-    notes?: string;
 
     extra?: Record<string, any>;
     sourceData?: Record<string, any>;
 
     public toJSON(fullData: boolean = false): Record<string, any> {
+        const extra = this.extra;
         const result: Record<string, any> = {
-            eventId: this.eventId,
-            trackingNum: this.trackingNum,
             status: this.status,
             what: this.what,
             when: this.when,
             where: this.where,
             whom: this.whom,
-            ...(this.exceptionCode != null &&
-                { exceptionCode: this.exceptionCode }),
-            ...(this.exceptionDesc != null &&
-                { exceptionDesc: this.exceptionDesc }),
-            ...(this.notificationCode != null &&
-                { notificationCode: this.notificationCode }),
-            ...(this.notificationDesc != null &&
-                { notificationDesc: this.notificationDesc }),
-            ...(this.notes != null &&
-                { notes: this.notes }),
-            extra: this.extra,
+            additional: {
+                operatorCode: this.operatorCode,
+                trackingNum: this.trackingNum,
+                ...(this.notes != null && { notes: this.notes }),
+                ...(this.dataProvider != null &&
+                    { dataProvider: this.dataProvider }),
+                ...(extra != null && ("lastUpdateMethod" in extra) &&
+                    { lastUpdateMethod: extra["lastUpdateMethod"] }),
+                ...(extra != null && ("lastUpdateTime" in extra) &&
+                    { lastUpdateTime: extra["lastUpdateTime"] }),
+                ...(this.exceptionCode != null &&
+                    { exceptionCode: this.exceptionCode }),
+                ...(this.exceptionDesc != null &&
+                    { exceptionDesc: this.exceptionDesc }),
+                ...(this.notificationCode != null &&
+                    { notificationCode: this.notificationCode }),
+                ...(this.notificationDesc != null &&
+                    { notificationDesc: this.notificationDesc }),
+                ...(extra != null && ("transitMode" in extra) &&
+                    { transitMode: extra["transitMode"] }),
+            },
         };
 
         if (fullData) {

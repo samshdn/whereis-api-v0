@@ -118,18 +118,17 @@ async function convertFromFedEx(
     };
     const completeTrackResult = result["output"]["completeTrackResults"][0];
     const trackResult = completeTrackResult["trackResults"][0];
+    entity.uuid = "eg1_" + crypto.randomUUID();
     entity.id = trakingNum;
     entity.params = params;
     entity.type = "waybill";
-    entity.dataProvider = "FedEx";
-    entity.origin = getAddress(trackResult["shipperInformation"]["address"]);
-    entity.destination = getAddress(
-        trackResult["recipientInformation"]["address"],
-    );
-    entity.extra = {};
-    entity.requestData = {
-        transactionId: result["transactionId"],
+    entity.extra = {
+        origin : getAddress(trackResult["shipperInformation"]["address"]),
+        destination : getAddress(
+            trackResult["recipientInformation"]["address"],
+        )
     };
+
     const scanEvents = trackResult["scanEvents"];
     for (let i = scanEvents.length - 1; i >= 0; i--) {
         const event = new Event();
@@ -137,9 +136,9 @@ async function convertFromFedEx(
         const fdxStatusCode = scanEvent["derivedStatusCode"];
         const fdxEventType = scanEvent["eventType"];
         const eagle1status: number = getStatus(fdxStatusCode, fdxEventType);
-
         event.eventId = "ev_" + await jsonToMd5(scanEvent);
-        event.trackingNum = "fdx-" + completeTrackResult["trackingNumber"];
+        event.operatorCode = "fdx";
+        event.trackingNum = completeTrackResult["trackingNumber"];
         event.status = eagle1status;
         event.what = CodeDesc.getDesc(eagle1status);
         event.when = scanEvent["date"];
@@ -153,9 +152,10 @@ async function convertFromFedEx(
         }
         event.whom = "FedEx";
         event.notes = scanEvent["eventDescription"];
+        event.dataProvider = "FedEx";
         event.extra = {
-            lastUpdateTime: new Date().toISOString(),
             lastUpdateMethod: updateMethod,
+            lastUpdateTime: new Date().toISOString(),
         };
         event.sourceData = scanEvent;
         entity.addEvent(event as Event);
@@ -205,16 +205,11 @@ async function convertFromSfEx(
     };
     const apiResult = JSON.parse(result["apiResultData"]);
     const routeResp = apiResult["msgData"]["routeResps"][0];
+    entity.uuid = "eg1_" + crypto.randomUUID();
     entity.id = trakingNum;
     entity.type = "waybill";
-    entity.dataProvider = "SF Express";
     entity.params = params;
     entity.extra = {};
-    entity.requestData = {
-        apiErrorMsg: result["apiErrorMsg"],
-        apiResultCode: result["apiResultCode"],
-        apiResponseID: result["apiResponseID"],
-    };
     const routes: [] = routeResp["routes"];
     routes.sort((a, b) =>
         new Date(a["acceptTime"]).getTime() -
@@ -228,7 +223,8 @@ async function convertFromSfEx(
         const status = getStatus(sfStatusCode, sfOpCode);
         const event: Event = new Event();
         event.eventId = "ev_" + await jsonToMd5(route);
-        event.trackingNum = "sfex-" + routeResp["mailNo"];
+        event.operatorCode = "sfex";
+        event.trackingNum = routeResp["mailNo"];
         event.status = status;
         event.what = CodeDesc.getDesc(status);
         // acceptTime format: 2024-10-26 06:12:43
@@ -238,9 +234,10 @@ async function convertFromSfEx(
         event.where = route["acceptAddress"];
         event.whom = "SFEx";
         event.notes = route["remark"];
+        event.dataProvider = "SF Express";
         event.extra = {
-            lastUpdateTime: new Date().toISOString(),
             lastUpdateMethod: updateMethod,
+            lastUpdateTime: new Date().toISOString(),
         };
         event.sourceData = route;
         entity.addEvent(event);

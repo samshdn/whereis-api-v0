@@ -1,5 +1,5 @@
 import { PoolClient } from "https://deno.land/x/postgres@v0.19.3/mod.ts";
-import { Entity, Event } from "./model.ts";
+import { Entity, Event, TrackingID } from "./model.ts";
 
 /**
  * Insert entity and events into table
@@ -12,21 +12,19 @@ export async function insertEntity(
 ): Promise<number | undefined> {
     // SQL statement for inserting
     const insertQuery = `
-        INSERT INTO entities (id, type, origin, destination, completed, extra, request_data, params, data_provider)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+        INSERT INTO entities (uuid, id, type, creation_time, completed, extra, params)
+        VALUES ($1, $2, $3, $4, $5, $6, $7);
     `;
 
     // The data to be inserted
     const values = [
+        entity.uuid,
         entity.id,
         entity.type,
-        entity.origin,
-        entity.destination,
+        entity.getCreationTime(),
         entity.isCompleted(),
         entity.extra,
-        entity.requestData,
         entity.params,
-        entity.dataProvider,
     ];
 
     // 执行插入操作
@@ -48,12 +46,11 @@ export async function updateEntity(
 ): Promise<number | undefined> {
     // SQL statement for updating
     const updateQuery = `
-        UPDATE entities SET completed=$1,request_data=$2 WHERE id=$3
+        UPDATE entities SET completed=$1 WHERE id=$2
         `;
     // update the entity record
     const result = await client.queryObject(updateQuery, [
         entity.isCompleted(),
-        entity.requestData,
         entity.id,
     ]);
 
@@ -84,9 +81,9 @@ async function insertEvent(
         INSERT INTO events (
             event_id, tracking_num, status, what, when_, where_, whom,
             exception_code, exception_desc, notification_code, notification_desc,
-            notes, extra, source_data
+            notes, extra, source_data, data_provider,operator_code
         ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
         );
         `;
 
@@ -106,6 +103,8 @@ async function insertEvent(
         event.notes,
         event.extra,
         event.sourceData,
+        event.dataProvider,
+        event.operatorCode,
     ];
 
     // 执行插入操作
@@ -117,39 +116,35 @@ async function insertEvent(
 // 按 tracking_num 查询数据
 export async function queryEntity(
     client: PoolClient,
-    trackingNum: string,
+    trackingID: TrackingID,
 ): Promise<Entity | undefined> {
     const result = await client.queryArray`
-            SELECT id,
-                   type,
-                   origin,
-                   destination,
-                   completed,
-                   extra,
-                   request_data,
-                   params,
-                   data_provider
-            FROM entities
-            WHERE id = ${trackingNum};
-        `;
+        SELECT uuid,
+               id,
+               type,
+               completed,
+               extra,
+               params,
+               creation_time
+        FROM entities
+        WHERE id = ${trackingID.toString()};
+    `;
 
     let entity: Entity | undefined;
     if (result.rows.length == 1) {
         entity = new Entity();
         const row = result.rows[0];
-        entity.id = row[0] as string;
-        entity.type = row[1] as string;
-        entity.origin = row[2] as string;
-        entity.destination = row[3] as string;
-        entity.completed = row[4] as boolean;
-        entity.extra = row[5] as Record<string, any>;
-        entity.requestData = row[6] as Record<string, any>;
-        entity.params = row[7] as Record<string, any>;
-        entity.dataProvider = row[8] as string;
+        entity.uuid = row[0] as string;
+        entity.id = row[1] as string;
+        entity.type = row[2] as string;
+        entity.completed = row[3] as boolean;
+        entity.extra = row[4] as Record<string, any>;
+        entity.params = row[5] as Record<string, any>;
+        entity.creationTime = row[6] as string;
     }
 
     if (entity != undefined) {
-        entity.events = await queryEvents(client, trackingNum);
+        entity.events = await queryEvents(client, trackingID);
     }
     return entity;
 }
@@ -157,44 +152,49 @@ export async function queryEntity(
 // 按 tracking_num 查询数据
 async function queryEvents(
     client: PoolClient,
-    trackingNum: string,
+    trackingID: TrackingID,
 ): Promise<Event[]> {
     const events: Event[] = [];
     const result = await client.queryArray`
-            SELECT event_id,
-                   tracking_num,
-                   status,
-                   what,
-                   when_,
-                   where_,
-                   whom,
-                   exception_code,
-                   exception_desc,
-                   notification_code,
-                   notification_desc,
-                   notes,
-                   extra,
-                   source_data
-            FROM events
-            WHERE tracking_num = ${trackingNum};
-        `;
+        SELECT event_id,
+               operator_code,
+               tracking_num,
+               status,
+               what,
+               when_,
+               where_,
+               whom,
+               exception_code,
+               exception_desc,
+               notification_code,
+               notification_desc,
+               notes,
+               extra,
+               source_data,
+               data_provider
+        FROM events
+        WHERE operator_code = ${trackingID.carrier}
+          AND tracking_num = ${trackingID.trackingNum};
+    `;
 
     for (const row of result.rows) {
         const event = new Event();
         event.eventId = row[0] as string;
-        event.trackingNum = row[1] as string;
-        event.status = row[2] as number;
-        event.what = row[3] as string;
-        event.when = row[4] as string;
-        event.where = row[5] as string;
-        event.whom = row[6] as string;
-        event.exceptionCode = row[7] as number;
-        event.exceptionDesc = row[8] as string;
-        event.notificationCode = row[9] as number;
-        event.notificationDesc = row[10] as string;
-        event.notes = row[11] as string;
-        event.extra = row[12] as Record<string, any>;
-        event.sourceData = row[13] as Record<string, any>;
+        event.operatorCode = row[1] as string;
+        event.trackingNum = row[2] as string;
+        event.status = row[3] as number;
+        event.what = row[4] as string;
+        event.when = row[5] as string;
+        event.where = row[6] as string;
+        event.whom = row[7] as string;
+        event.exceptionCode = row[8] as number;
+        event.exceptionDesc = row[9] as string;
+        event.notificationCode = row[10] as number;
+        event.notificationDesc = row[11] as string;
+        event.notes = row[12] as string;
+        event.extra = row[13] as Record<string, any>;
+        event.sourceData = row[14] as Record<string, any>;
+        event.dataProvider = row[15] as string;
         events.push(event);
     }
 
