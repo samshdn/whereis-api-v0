@@ -1,0 +1,12 @@
+{
+  "200": "Success",
+  "400-01": "Bad request: Missing tracking number as the slug.",
+  "400-02": "Invalid tracking number.",
+  "400-03": "Bad request: Missing parameter (phonenum), the last 4-digit phone number associated with SF Express shipment.",
+  "400-04": "Invalid carrier code",
+  "400-05": "Invalid slug notation",
+  "401-01": "Authorization header or invalid format",
+  "401-02": "Unauthorized: invalid access token.",
+  "404-01": "Not found: Tracking number not found.",
+  "429-01": "Too many requests."
+}

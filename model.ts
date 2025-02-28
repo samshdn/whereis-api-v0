@@ -1,3 +1,5 @@
+import { loadJSONFromFs } from "./util.ts";
+
 export class CodeDesc {
     private static instance: CodeDesc = new CodeDesc();
 
@@ -19,7 +21,8 @@ export class CodeDesc {
         this.data = {};
     }
 
-    public static initialize(record: Record<string, string>): void {
+    public static async initialize(fileName: string): Promise<void> {
+        const record: Record<string, string> = await loadJSONFromFs(fileName);
         for (const [key, value] of Object.entries(record)) {
             const numericKey = Number(key);
             this.instance.set(numericKey, value);
@@ -31,9 +34,47 @@ export class CodeDesc {
     }
 }
 
+// enum ErrorCode {
+//     Success = "200",
+//     MissingSlug = "400-01",
+//     InvalidTrackingNum = "400-02",
+//     MissingParameter = "400-03",
+//     InvalidCarrier = "400-04",
+//     InvalidFormat = "400-05",
+// }
+//
+// // 定义单个错误条目接口
+// interface ErrorEntry {
+//     code: ErrorCode;
+//     message: string;
+// }
+
+// 定义错误管理类
+export class ErrorRegistry {
+    // 使用 Map 存储错误码和消息的映射
+    private static errors: Record<string, string>;
+
+    // 初始化方法，从数据加载错误
+    static async initialize(fileName: string): Promise<void> {
+        this.errors = await loadJSONFromFs(fileName);
+    }
+
+    // 获取特定错误码的消息
+    static getMessage(code: string): string | undefined {
+        return this.errors[code];
+    }
+}
+
+type ParseResult = [
+    string | undefined,
+    TrackingID | undefined,
+];
+
 export class TrackingID {
     carrier: string;
     trackingNum: string;
+
+    static carriers: string[] = ["fdx", "sfex"];
 
     private constructor(carrier: string, trackingNum: string) {
         this.carrier = carrier;
@@ -44,13 +85,46 @@ export class TrackingID {
         return this.carrier + "-" + this.trackingNum;
     }
 
-    static parse(strTrackingID: string): TrackingID | undefined {
+    static parse(strTrackingID: string): ParseResult {
         const array = strTrackingID.split("-");
-        if (array.length === 2) {
-            return new TrackingID(array[0], array[1]);
+        if ("" == strTrackingID.trim()) {
+            return ["400-01", undefined];
+        } else if (array.length != 2) {
+            return ["400-05", undefined];
         } else {
-            return undefined;
+            const carrier: string = array[0];
+            const trackingNum: string = array[1];
+            if (!this.carriers.includes(carrier)) {
+                return ["400-04", undefined];
+            }
+            if ("fdx" == carrier) {
+                const errorCode = this.checkFedExTrackingNum(trackingNum);
+                if (errorCode != undefined) {
+                    return [errorCode, undefined];
+                }
+            }
+            if ("sfex" == carrier) {
+                const errorCode = this.checkSFTrackingNum(trackingNum);
+                if (errorCode != undefined) {
+                    return [errorCode, undefined];
+                }
+            }
+            return [undefined, new TrackingID(carrier, trackingNum)];
         }
+    }
+
+    static checkFedExTrackingNum(trackingNum: string): string | undefined {
+        if (trackingNum.length != 12) {
+            return "400-02";
+        }
+        return undefined;
+    }
+
+    static checkSFTrackingNum(trackingNum: string): string | undefined {
+        if (trackingNum.length != 15 || !trackingNum.startsWith("SF")) {
+            return "400-02";
+        }
+        return undefined;
     }
 }
 
@@ -85,7 +159,9 @@ export class Entity {
             id: this.id,
             type: this.type,
             creationTime: this.getCreationTime(),
-            additional: Object.keys(additional).length > 0 ? additional : undefined,
+            additional: Object.keys(additional).length > 0
+                ? additional
+                : undefined,
         };
 
         const events = [];

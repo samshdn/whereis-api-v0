@@ -26,7 +26,7 @@ async function syncRoutes() {
         client.queryObject("BEGIN");
         // for (const inProcessTrackingNum of inProcessTrackingNums) {
         for (const [key, value] of Object.entries(inProcessTrackingNums)) {
-            const trackingID = TrackingID.parse(key);
+            const [error, trackingID] = TrackingID.parse(key);
             if (trackingID === undefined) {
                 continue;
             }

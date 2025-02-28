@@ -1,11 +1,11 @@
-import { Hono } from "hono";
-import { bearerAuth } from "hono/bearer-auth";
+import { Hono,Context, Next } from "hono";
+import { StatusCode } from 'hono/utils/http-status';
 import { QueryArrayResult } from "https://deno.land/x/postgres/mod.ts";
 
 import { dbPool } from "./dbUtil.ts";
 import { logger } from "./logger.ts";
 import { requestWhereIs } from "./gateway.ts";
-import { Entity, TrackingID } from "./model.ts";
+import { Entity, ErrorRegistry, TrackingID } from "./model.ts";
 import {
     insertEntity,
     queryEntity,
@@ -20,40 +20,89 @@ export class Server {
         this.port = port;
     }
 
+    verifyToken(token: string): boolean {
+        return token == "eagle1";
+    }
+
+
+    getHttpCode(errorCode: string): number {
+        const parts = errorCode.split('-');
+        const httpStatusCode = Number(parts[0]);
+        // validate the first part
+        if (isNaN(httpStatusCode)) {
+            throw new Error('Invalid parameter');
+        }
+
+        return httpStatusCode;
+    }
+
     start(): void {
         const app = new Hono();
 
-        app.use(
-            "/v0/*/:id",
-            bearerAuth({
-                verifyToken: async (token: string, c) => {
-                    return token === "eagle1";
-                },
-            }),
-        );
+        // 自定义 Bearer Auth 中间件
+        const customBearerAuth = async (c: Context, next: Next) => {
+            const authHeader = c.req.header("Authorization");
+            const missingAuthHeader = "401-01";
+            const invalidToken = "401-02";
+            if (!authHeader || !authHeader.startsWith("Bearer ")) {
+                return c.json(
+                    {
+                        code: missingAuthHeader,
+                        message: ErrorRegistry.getMessage(missingAuthHeader),
+                    },
+                    this.getHttpCode(missingAuthHeader) as StatusCode, // unAuthorized
+                );
+            }
 
-        app.get("/v0/status/:id", async (c) => {
+            const token = authHeader.split(" ")[1];
+            const isValidToken = this.verifyToken(token); // 你需要实现这个函数
+
+            if (!isValidToken) {
+                return c.json(
+                    {
+                        message: invalidToken,
+                        error: ErrorRegistry.getMessage(invalidToken),
+                    },
+                    this.getHttpCode(invalidToken) as StatusCode, // unAuthorized
+                );
+            }
+
+            // 如果 token 有效，继续执行后续逻辑
+            await next();
+        };
+
+        app.use("/v0/*/:id", customBearerAuth);
+
+        app.get("/v0/status/:id?", async (c) => {
             const id = c.req.param("id");
             // query DB to get the status
             return c.json({ status: 3500, what: "Delivered" });
         });
 
-        app.get("/v0/whereis/:id", async (c) => {
+        app.get("/v0/whereis/:id?", async (c) => {
             try {
                 // Carrier-TrackingNumber
-                const id = c.req.param("id");
-                const trackingID = TrackingID.parse(id);
+                const id = c.req.param("id") ?? "";
+                const [error, trackingID] = TrackingID.parse(id);
                 if (trackingID == undefined) {
-                    return c.text("Invalid request: url string", 400);
+                    const errorCode = error ?? "";
+                    return c.json(
+                        {
+                            code: errorCode,
+                            message: ErrorRegistry.getMessage(errorCode),
+                        },
+                        this.getHttpCode(errorCode) as StatusCode,
+                    );
                 }
-
-                // get the full url string
-                let entity: Entity | undefined;
-                const fullData: boolean = "true" == c.req.query("fulldata");
                 const queryParams = this.getExtraParams(
                     c.req,
                     trackingID.carrier,
                 );
+
+                // get the full url string
+                let entity: Entity | undefined;
+                const fullData: boolean = "true" == c.req.query("fulldata");
+
                 if (c.req.param("refresh") === undefined) {
                     let client;
                     try {
@@ -156,9 +205,18 @@ export class Server {
             return c.html("<h3>Hello Eegle1!</h3>");
         });
 
-        // // 统一错误处理
+        app.notFound((c) => {
+            return c.json(
+                {
+                    code: '404',
+                    message: '未找到对应的资源，请检查请求URL',
+                },
+                404
+            );
+        });
+
+        // 统一错误处理
         // app.onError((err, c) => {
-        //     console.error("Caught error:", err);
         //     return c.json({
         //         message: "Internal Server Error",
         //         error: err.message,
