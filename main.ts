@@ -3,11 +3,14 @@ import { logger } from "./logger.ts";
 import {startScheduler} from "./schedule.ts";
 import "https://deno.land/x/dotenv/load.ts";
 import {CodeDesc, ErrorRegistry} from "./model.ts";
+import {loadJSONFromFs} from "./util.ts";
 
 // load code & desc from file system
 try {
-    await CodeDesc.initialize("codes.json ");
-    await ErrorRegistry.initialize("errors.json");
+    const status: Record<string, any> = await loadJSONFromFs("codes.json");
+    CodeDesc.initialize(status);
+    const errors: Record<string, any> = await loadJSONFromFs("errors.json");
+    ErrorRegistry.initialize(errors);
 } catch (e) {
     console.error("Error loading JSON file:", e);
 }

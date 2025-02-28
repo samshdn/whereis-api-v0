@@ -21,8 +21,7 @@ export class CodeDesc {
         this.data = {};
     }
 
-    public static async initialize(fileName: string): Promise<void> {
-        const record: Record<string, string> = await loadJSONFromFs(fileName);
+    public static initialize(record: Record<string, any>): void {
         for (const [key, value] of Object.entries(record)) {
             const numericKey = Number(key);
             this.instance.set(numericKey, value);
@@ -34,34 +33,34 @@ export class CodeDesc {
     }
 }
 
-// enum ErrorCode {
-//     Success = "200",
-//     MissingSlug = "400-01",
-//     InvalidTrackingNum = "400-02",
-//     MissingParameter = "400-03",
-//     InvalidCarrier = "400-04",
-//     InvalidFormat = "400-05",
-// }
-//
-// // 定义单个错误条目接口
-// interface ErrorEntry {
-//     code: ErrorCode;
-//     message: string;
-// }
-
 // 定义错误管理类
 export class ErrorRegistry {
-    // 使用 Map 存储错误码和消息的映射
-    private static errors: Record<string, string>;
+
+    private static instance: ErrorRegistry = new ErrorRegistry();
+
+    // keep code-description pairs
+    private data: { [code: string]: string } = {};
+
+    // add key-value pair
+    set(code: string, description: string): void {
+        this.data[code] = description;
+    }
+
+    // get value by key
+    get(code: string): string | undefined {
+        return this.data[code];
+    }
 
     // 初始化方法，从数据加载错误
-    static async initialize(fileName: string): Promise<void> {
-        this.errors = await loadJSONFromFs(fileName);
+    static initialize(record: Record<string, any>): void {
+        for (const [key, value] of Object.entries(record)) {
+            this.instance.set(key, value);
+        }
     }
 
     // 获取特定错误码的消息
     static getMessage(code: string): string | undefined {
-        return this.errors[code];
+        return this.instance.get(code) ?? "";
     }
 }
 

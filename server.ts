@@ -13,6 +13,12 @@ import {
     updateEntity,
 } from "./dbOp.ts";
 
+declare module 'hono' {
+    interface Context {
+        sendError: (errorCode: string) => Response;
+    }
+}
+
 export class Server {
     private readonly port: number;
 
@@ -23,7 +29,6 @@ export class Server {
     verifyToken(token: string): boolean {
         return token == "eagle1";
     }
-
 
     getHttpCode(errorCode: string): number {
         const parts = errorCode.split('-');
@@ -37,39 +42,40 @@ export class Server {
     }
 
     start(): void {
+
         const app = new Hono();
 
-        // 自定义 Bearer Auth 中间件
+        // Bearer Auth middleware
         const customBearerAuth = async (c: Context, next: Next) => {
             const authHeader = c.req.header("Authorization");
-            const missingAuthHeader = "401-01";
-            const invalidToken = "401-02";
             if (!authHeader || !authHeader.startsWith("Bearer ")) {
-                return c.json(
-                    {
-                        code: missingAuthHeader,
-                        message: ErrorRegistry.getMessage(missingAuthHeader),
-                    },
-                    this.getHttpCode(missingAuthHeader) as StatusCode, // unAuthorized
-                );
+                return c.sendError("401-01");
             }
 
             const token = authHeader.split(" ")[1];
             const isValidToken = this.verifyToken(token); // 你需要实现这个函数
-
             if (!isValidToken) {
-                return c.json(
-                    {
-                        message: invalidToken,
-                        error: ErrorRegistry.getMessage(invalidToken),
-                    },
-                    this.getHttpCode(invalidToken) as StatusCode, // unAuthorized
-                );
+                return c.sendError("401-02");
             }
 
-            // 如果 token 有效，继续执行后续逻辑
+            // if token is valid
             await next();
         };
+
+        // Extend Context class
+        app.use('*', async (c, next) => {
+            // 扩展 Context，添加 sendMyJSON 方法
+            c.sendError = (code: string) => {
+                return c.json(
+                    {
+                        message: code,
+                        error: ErrorRegistry.getMessage(code),
+                    },
+                    this.getHttpCode(code) as StatusCode, // unAuthorized
+                );
+            };
+            await next();
+        });
 
         app.use("/v0/*/:id", customBearerAuth);
 
@@ -80,108 +86,95 @@ export class Server {
         });
 
         app.get("/v0/whereis/:id?", async (c) => {
-            try {
-                // Carrier-TrackingNumber
-                const id = c.req.param("id") ?? "";
-                const [error, trackingID] = TrackingID.parse(id);
-                if (trackingID == undefined) {
-                    const errorCode = error ?? "";
-                    return c.json(
-                        {
-                            code: errorCode,
-                            message: ErrorRegistry.getMessage(errorCode),
-                        },
-                        this.getHttpCode(errorCode) as StatusCode,
-                    );
-                }
-                const queryParams = this.getExtraParams(
-                    c.req,
-                    trackingID.carrier,
-                );
+            // Carrier-TrackingNumber
+            const id = c.req.param("id") ?? "";
+            const [error, trackingID] = TrackingID.parse(id);
+            if (trackingID == undefined) {
+                const errorCode = error ?? "";
+                return c.sendError(errorCode);
+            }
 
-                // get the full url string
-                let entity: Entity | undefined;
-                const fullData: boolean = "true" == c.req.query("fulldata");
+            const queryParams = this.getExtraParams(
+                c.req,
+                trackingID.carrier,
+            );
 
-                if (c.req.param("refresh") === undefined) {
-                    let client;
-                    try {
-                        client = await dbPool.connect();
+            // get the full url string
+            let entity: Entity | undefined;
+            const fullData: boolean = "true" == c.req.query("fulldata");
 
-                        // try to load from database first
-                        entity = await queryEntity(client, trackingID);
-                        if (entity !== undefined) {
-                            return c.json(entity.toJSON(fullData));
-                        }
+            if (c.req.param("refresh") === undefined) {
+                let client;
+                try {
+                    client = await dbPool.connect();
 
-                        entity = await requestWhereIs(
-                            trackingID,
-                            queryParams,
-                            "manual-pull",
-                        );
-                        if (entity === undefined) {
-                            return c.notFound();
-                        }
-
-                        client.queryObject("BEGIN");
-                        await insertEntity(client, entity);
-                        client.queryObject("COMMIT");
+                    // try to load from database first
+                    entity = await queryEntity(client, trackingID);
+                    if (entity !== undefined) {
                         return c.json(entity.toJSON(fullData));
-                    } catch (error) {
-                        logger.error(error);
-                        if (client) {
-                            client.queryObject("ROLLBACK");
-                        }
-                    } finally {
-                        if (client) {
-                            client.release();
-                        }
                     }
-                } else {
-                    // load from carrier
-                    const entity = await requestWhereIs(
+
+                    entity = await requestWhereIs(
                         trackingID,
                         queryParams,
                         "manual-pull",
                     );
-                    // case A: the entity can not be found
                     if (entity === undefined) {
-                        return c.notFound();
+                        return c.sendError("404-01");
                     }
 
-                    // case B: entity is NOT null, update the routes on-necessary
-                    let client;
-                    try {
-                        client = await dbPool.connect();
-                        const eventIds: string[] = await queryEventIds(
-                            client,
-                            id,
-                        );
-                        if (entity.eventNum() > eventIds.length) {
-                            // update the entity
-                            client.queryObject("BEGIN");
-                            await updateEntity(client, entity, eventIds);
-                            client.queryObject("COMMIT");
-                        }
-                    } catch (error) {
-                        logger.error(error);
-                        if (client) {
-                            client.queryObject("ROLLBACK");
-                        }
-                    } finally {
-                        if (client) {
-                            client.release();
-                        }
-                    }
-                    // send response
+                    client.queryObject("BEGIN");
+                    await insertEntity(client, entity);
+                    client.queryObject("COMMIT");
                     return c.json(entity.toJSON(fullData));
+                } catch (error) {
+                    logger.error(error);
+                    if (client) {
+                        client.queryObject("ROLLBACK");
+                    }
+                } finally {
+                    if (client) {
+                        client.release();
+                    }
                 }
-            } catch (err) {
-                console.error("Error in /detailed route:", err);
-                return c.json({
-                    message: "Error caught locally",
-                    error: (err as Error).message,
-                }, 400);
+            } else {
+                // load from carrier
+                const entity = await requestWhereIs(
+                    trackingID,
+                    queryParams,
+                    "manual-pull",
+                );
+                // case A: the entity can not be found
+                if (entity === undefined) {
+                    return c.sendError("404-01");
+                }
+
+                // case B: entity is NOT null, update the routes on-necessary
+                let client;
+                try {
+                    client = await dbPool.connect();
+                    const eventIds: string[] = await queryEventIds(
+                        client,
+                        id,
+                    );
+                    if (entity.eventNum() > eventIds.length) {
+                        // update the entity
+                        client.queryObject("BEGIN");
+                        await updateEntity(client, entity, eventIds);
+                        client.queryObject("COMMIT");
+                    }
+                } catch (error) {
+                    logger.error(error);
+                    if (client) {
+                        client.queryObject("ROLLBACK");
+                    }
+                } finally {
+                    if (client) {
+                        client.release();
+                    }
+                }
+                // send response
+                return c.json(entity.toJSON(fullData));
             }
         });
 
@@ -216,12 +209,12 @@ export class Server {
         });
 
         // 统一错误处理
-        // app.onError((err, c) => {
-        //     return c.json({
-        //         message: "Internal Server Error",
-        //         error: err.message,
-        //     }, 500);
-        // });
+        app.onError((err, c) => {
+            return c.json({
+                message: "Internal Server Error",
+                error: err.message,
+            }, 500);
+        });
 
         Deno.serve({ port: this.port }, app.fetch);
     }
