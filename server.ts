@@ -2,7 +2,7 @@ import { Hono,Context, Next } from "hono";
 import { StatusCode } from 'hono/utils/http-status';
 import { QueryArrayResult } from "https://deno.land/x/postgres/mod.ts";
 
-import { dbPool } from "./dbUtil.ts";
+import { dbPool } from "./dbutil.ts";
 import { logger } from "./logger.ts";
 import { requestWhereIs } from "./gateway.ts";
 import { Entity, ErrorRegistry, TrackingID } from "./model.ts";

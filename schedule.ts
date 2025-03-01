@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { dbPool } from "./dbUtil.ts";
+import { dbPool } from "./dbutil.ts";
 import {
     getInProcessingTrackingNums,
     queryEventIds,
