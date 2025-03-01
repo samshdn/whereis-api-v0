@@ -1,26 +1,27 @@
 import { Pool } from "https://deno.land/x/postgres/mod.ts";
 const POOL_CONNECTIONS = 20;
 
-// define db connection params
-// export const config = {
-//     database: "where_is",
-//     hostname: "192.168.159.132",
-//     password: "Inteva2025$",
-//     port: 5432,
-//     user: "postgres",
-// };
+let dbPool: Pool | null = null;
 
-export const config = {
-    database: "where_is",
-    hostname: "pg-whereis.internal",
-    password: "Inteva2025$",
-    port: 5432,
-    user: "postgres",
-};
+export function initializeDbPool() {
+    if (!dbPool) {
+        dbPool = new Pool(
+            {
+                database: Deno.env.get("DATABASE_NAME"),
+                hostname: Deno.env.get("DATABASE_HOST"),
+                password: Deno.env.get("DATABASE_PASSWORD"),
+                port: Deno.env.get("DATABASE_PORT"),
+                user: Deno.env.get("DATABASE_USER"),
+            },
+            POOL_CONNECTIONS,
+        )
+    }
+    return dbPool;
+}
 
-// export const dbPool = undefined;
-// Init db client pool
-export const dbPool = new Pool(
-    config,
-    POOL_CONNECTIONS,
-);
+export async function connect() {
+    if (!dbPool) {
+        throw new Error("Database pool not initialized. Call initializeDbPool first.");
+    }
+    return await dbPool.connect();
+}

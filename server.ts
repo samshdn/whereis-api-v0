@@ -1,9 +1,9 @@
-import { Hono,Context, Next } from "hono";
-import { StatusCode } from 'hono/utils/http-status';
+import { Context, Hono, Next } from "hono";
+import { StatusCode } from "hono/utils/http-status";
 import { QueryArrayResult } from "https://deno.land/x/postgres/mod.ts";
 
-import { dbPool } from "./dbutil.ts";
 import { logger } from "./logger.ts";
+import { connect } from "./dbutil.ts";
 import { requestWhereIs } from "./gateway.ts";
 import { Entity, ErrorRegistry, TrackingID } from "./model.ts";
 import {
@@ -13,7 +13,8 @@ import {
     updateEntity,
 } from "./dbop.ts";
 
-declare module 'hono' {
+declare module "hono" {
+    // noinspection JSUnusedGlobalSymbols
     interface Context {
         sendError: (errorCode: string) => Response;
     }
@@ -31,18 +32,17 @@ export class Server {
     }
 
     getHttpCode(errorCode: string): number {
-        const parts = errorCode.split('-');
+        const parts = errorCode.split("-");
         const httpStatusCode = Number(parts[0]);
         // validate the first part
         if (isNaN(httpStatusCode)) {
-            throw new Error('Invalid parameter');
+            throw new Error("Invalid parameter");
         }
 
         return httpStatusCode;
     }
 
     start(): void {
-
         const app = new Hono();
 
         // Bearer Auth middleware
@@ -63,8 +63,8 @@ export class Server {
         };
 
         // Extend Context class
-        app.use('*', async (c, next) => {
-            // 扩展 Context，添加 sendMyJSON 方法
+        app.use("*", async (c, next) => {
+            // Extend Context，add sendMyJSON method
             c.sendError = (code: string) => {
                 return c.json(
                     {
@@ -80,7 +80,7 @@ export class Server {
         app.use("/v0/*/:id", customBearerAuth);
 
         app.get("/v0/status/:id?", async (c) => {
-            const id = c.req.param("id");
+            const id: string | undefined = c.req.param("id");
             // query DB to get the status
             return c.json({ status: 3500, what: "Delivered" });
         });
@@ -106,7 +106,7 @@ export class Server {
             if (c.req.param("refresh") === undefined) {
                 let client;
                 try {
-                    client = await dbPool.connect();
+                    client = await connect();
 
                     // try to load from database first
                     entity = await queryEntity(client, trackingID);
@@ -152,7 +152,7 @@ export class Server {
                 // case B: entity is NOT null, update the routes on-necessary
                 let client;
                 try {
-                    client = await dbPool.connect();
+                    client = await connect();
                     const eventIds: string[] = await queryEventIds(
                         client,
                         id,
@@ -182,7 +182,7 @@ export class Server {
             let result: QueryArrayResult | undefined;
             // Init db client
             try {
-                using client = await dbPool.connect();
+                using client = await connect();
                 result = await client.queryArray`SELECT now()`;
             } catch (error) {
                 logger.error(`Database operation failed: ${error}`);
@@ -201,10 +201,10 @@ export class Server {
         app.notFound((c) => {
             return c.json(
                 {
-                    code: '404',
-                    message: '未找到对应的资源，请检查请求URL',
+                    code: "404",
+                    message: "未找到对应的资源，请检查请求URL",
                 },
-                404
+                404,
             );
         });
 

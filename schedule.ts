@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { dbPool } from "./dbutil.ts";
+import { connect } from "./dbutil.ts";
 import {
     getInProcessingTrackingNums,
     queryEventIds,
@@ -20,7 +20,7 @@ async function syncRoutes() {
     let client;
     let inProcessTrackingNums: Record<string, any>;
     try {
-        client = await dbPool.connect();
+        client = await connect();
         inProcessTrackingNums = await getInProcessingTrackingNums(client);
 
         client.queryObject("BEGIN");
