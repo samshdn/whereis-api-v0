@@ -8,9 +8,10 @@ import { CodeDesc, ErrorRegistry } from "./model.ts";
 
 // load .env file and put the data to  Deno.env
 async function loadEnv() {
-    const env = await load({ envPath: "./.env" }); // 指定 .env 文件路径
+    const env = await load({ envPath: "./.env" });
     for (const [key, value] of Object.entries(env)) {
-        Deno.env.set(key, value); // 将环境变量手动设置到 Deno.env
+        // set environment variable to Deno.env
+        Deno.env.set(key, value);
     }
 }
 
