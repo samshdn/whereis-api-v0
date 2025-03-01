@@ -68,8 +68,8 @@ export class Server {
             c.sendError = (code: string) => {
                 return c.json(
                     {
-                        message: code,
-                        error: ErrorRegistry.getMessage(code),
+                        code: code,
+                        message: ErrorRegistry.getMessage(code),
                     },
                     this.getHttpCode(code) as StatusCode, // unAuthorized
                 );
