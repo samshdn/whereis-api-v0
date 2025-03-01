@@ -4,7 +4,7 @@ import {
     getInProcessingTrackingNums,
     queryEventIds,
     updateEntity,
-} from "./dbOp.ts";
+} from "./dbop.ts";
 import { logger } from "./logger.ts";
 import { requestWhereIs } from "./gateway.ts";
 import { TrackingID } from "./model.ts";

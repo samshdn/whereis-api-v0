@@ -3,7 +3,7 @@ import axios from "axios";
 import { createHash } from "node:crypto";
 import {logger} from "./logger.ts";
 
-export class SfEx {
+export class Sfex {
     /**
      * Generate a signed digest for API requests
      * @param {string} msgString - The request payload as a string
@@ -43,7 +43,7 @@ export class SfEx {
             };
             const timestamp = Date.now();
             const msgString = JSON.stringify(msgData);
-            const msgDigest = SfEx.generateSignature(
+            const msgDigest = Sfex.generateSignature(
                 msgString,
                 timestamp,
                 SF_Express_CheckWord,

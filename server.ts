@@ -11,7 +11,7 @@ import {
     queryEntity,
     queryEventIds,
     updateEntity,
-} from "./dbOp.ts";
+} from "./dbop.ts";
 
 declare module 'hono' {
     interface Context {

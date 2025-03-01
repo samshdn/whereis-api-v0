@@ -1,5 +1,5 @@
-import { SfEx } from "./sfEx.ts";
-import { FedEx } from "./fedEx.ts";
+import { Sfex } from "./sfex.ts";
+import { Fedex } from "./fedex.ts";
 import { CodeDesc, Entity, TrackingID, Event } from "./model.ts";
 import { jsonToMd5 } from "./util.ts";
 import { logger } from "./logger.ts";
@@ -29,12 +29,12 @@ async function requestRoutes(
     const trackingNum = trackingID.trackingNum;
     switch (trackingID.carrier) {
         case "sfex":
-            return await SfEx.getRoute(
+            return await Sfex.getRoute(
                 trackingNum,
                 extraParams["phonenum"],
             );
         case "fdx":
-            return await FedEx.getRoute(trackingID.trackingNum);
+            return await Fedex.getRoute(trackingID.trackingNum);
     }
     return undefined;
 }

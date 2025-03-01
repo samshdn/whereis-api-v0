@@ -1,7 +1,7 @@
 import axios from "axios";
 import {logger} from "./logger.ts";
 
-export class FedEx {
+export class Fedex {
     // keep the last token & expire time
     private static token: string;
     // expired in x seconds
