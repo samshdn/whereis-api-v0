@@ -149,6 +149,30 @@ export async function queryEntity(
     return entity;
 }
 
+export async function queryStatus(
+    client: PoolClient,
+    trackingID: TrackingID,
+): Promise<Record<string, any> | undefined> {
+    const result = await client.queryArray`
+        SELECT status,
+               what
+        FROM events
+        WHERE operator_code = ${trackingID.carrier}
+          AND tracking_num = ${trackingID.trackingNum}
+        ORDER BY when_ DESC LIMIT 1;
+    `;
+
+    if (result.rows.length == 1) {
+        const row = result.rows[0];
+        return {
+            status: row[0] as number,
+            what: row[1] as string
+        }
+    }
+
+    return undefined;
+}
+
 // 按 tracking_num 查询数据
 async function queryEvents(
     client: PoolClient,

@@ -35,7 +35,6 @@ export class CodeDesc {
 
 // 定义错误管理类
 export class ErrorRegistry {
-
     private static instance: ErrorRegistry = new ErrorRegistry();
 
     // keep code-description pairs
@@ -229,6 +228,15 @@ export class Entity {
         if (this.events === undefined) return "";
 
         return this.events[0].when;
+    }
+
+    public getLastStatus() {
+        if (this.events === undefined) {
+            return undefined;
+        } else {
+            const lastEvent = this.events[this.events.length - 1];
+            return { status: lastEvent.status, what: lastEvent.what };
+        }
     }
 }
 
