@@ -78,7 +78,7 @@ export class Server {
             await next();
         });
 
-        app.use("/v0/*/:id", customBearerAuth);
+        app.use("/v0/whereis/:id", customBearerAuth);
 
         app.get("/v0/status/:id?", async (c) => {
             // Carrier-TrackingNumber
@@ -160,21 +160,13 @@ export class Server {
         });
 
         app.get("/", (c) => {
-            return c.html("<h3>Hello Eegle1!</h3>");
+            throw new Error('Something went wrong!')
+            // return c.html("<h3>Hello Eegle1!</h3>");
         });
 
-        app.notFound((c) => {
-            return c.json(
-                {
-                    code: "404",
-                    message: "未找到对应的资源，请检查请求URL",
-                },
-                404,
-            );
-        });
-
-        // 统一错误处理
+        // error handling
         app.onError((err, c) => {
+            logger.error("Internal Server Error:", err);
             return c.json({
                 message: "Internal Server Error",
                 error: err.message,

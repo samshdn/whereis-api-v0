@@ -1,5 +1,3 @@
-import { loadJSONFromFs } from "./util.ts";
-
 export class CodeDesc {
     private static instance: CodeDesc = new CodeDesc();
 
@@ -33,7 +31,7 @@ export class CodeDesc {
     }
 }
 
-// 定义错误管理类
+// Define error codes
 export class ErrorRegistry {
     private static instance: ErrorRegistry = new ErrorRegistry();
 
@@ -50,14 +48,14 @@ export class ErrorRegistry {
         return this.data[code];
     }
 
-    // 初始化方法，从数据加载错误
+    // load error code & message from metadata
     static initialize(record: Record<string, any>): void {
         for (const [key, value] of Object.entries(record)) {
             this.instance.set(key, value);
         }
     }
 
-    // 获取特定错误码的消息
+    // get error message by error code
     static getMessage(code: string): string | undefined {
         return this.instance.get(code) ?? "";
     }
@@ -231,11 +229,15 @@ export class Entity {
     }
 
     public getLastStatus() {
-        if (this.events === undefined) {
+        const lastEvent = this.lastEvent();
+        if (lastEvent === undefined) {
             return undefined;
         } else {
-            const lastEvent = this.events[this.events.length - 1];
-            return { status: lastEvent.status, what: lastEvent.what };
+            return {
+                id: this.id,
+                status: lastEvent.status,
+                what: lastEvent.what,
+            };
         }
     }
 }

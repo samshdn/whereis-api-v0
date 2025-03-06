@@ -1,9 +1,31 @@
 import axios from "axios";
 
 import { createHash } from "node:crypto";
-import {logger} from "./logger.ts";
+import { logger } from "./logger.ts";
+import { CodeDesc, Entity, Event } from "./model.ts";
+import { jsonToMd5 } from "./util.ts";
 
 export class Sfex {
+
+    static async whereIs(
+        trackingNum: string,
+        extraParams: Record<string, string>,
+        updateMethod: string,
+    ): Promise<Entity | undefined> {
+        const result = await this.getRoute(
+            trackingNum,
+            extraParams["phonenum"],
+        );
+        if (result === undefined) return undefined;
+
+        return await this.convert(
+            trackingNum,
+            result,
+            extraParams,
+            updateMethod,
+        );
+    }
+
     /**
      * Generate a signed digest for API requests
      * @param {string} msgString - The request payload as a string
@@ -69,11 +91,95 @@ export class Sfex {
             throw error;
         }
     }
-}
 
-// import "https://deno.land/x/dotenv/load.ts";
-//
-// const checkkWord = Deno.env.get("SF_EXPRESS_CheckkWord") ?? "";
-// // Example usage： SF3125541537519(5567) / SF1391170523494(0473)
-// const data = await SFExpress.getShipmentDetails("SF3125541537519", "5567"); // Replace with a valid tracking number
-// console.log(data);
+    private static async convert(
+        trakingNum: string,
+        result: Record<string, any>,
+        params: Record<string, string>,
+        updateMethod: string,
+    ): Promise<Entity | undefined> {
+        const getStatus = (statusCode: number, opCode: number): number => {
+            if (statusCode === 101) {
+                return 3100;
+            } else if (statusCode === 201) {
+                // todo...review opCode 30
+                if (opCode === 30) {
+                    return 3001;
+                } else if (opCode === 31) {
+                    return 3002; // arrived
+                } else if (opCode === 36) {
+                    return 3004; // Departed
+                } else if (opCode === 105) {
+                    return 3250; // In-Transit
+                } else if (opCode === 106) {
+                    return 3300; // Arrived At Destination
+                } else if (opCode === 310) {
+                    return 3002; // Arrived
+                }
+            } else if (statusCode === 204) {
+                if (opCode === 605) {
+                    return 3350; // Customs Clearance: Import In-Progress
+                }
+            } else if (statusCode === 301) {
+                if (opCode === 44) {
+                    return 3001; // Logistics In-Progress
+                } else if (opCode === 204) {
+                    return 3450; // Final Delivery In-Progress
+                }
+            } else if (statusCode === 401) {
+                if (opCode === 80) {
+                    return 3500; // Delivered
+                }
+            } else if (statusCode === 1301) {
+                if (opCode === 70) {
+                    return 3300; // Arrived At Destination
+                }
+            }
+            return 0;
+        };
+        const apiResult = JSON.parse(result["apiResultData"]);
+        const routeResp = apiResult["msgData"]["routeResps"][0];
+        const routes: [] = routeResp["routes"];
+        if (routes.length == 0) return undefined;
+
+        const entity: Entity = new Entity();
+        entity.uuid = "eg1_" + crypto.randomUUID();
+        entity.id = trakingNum;
+        entity.type = "waybill";
+        entity.params = params;
+        entity.extra = {};
+        routes.sort((a, b) =>
+            new Date(a["acceptTime"]).getTime() -
+            new Date(b["acceptTime"]).getTime()
+        );
+        for (let i = 0; i < routes.length; i++) {
+            const route = routes[i];
+
+            const sfStatusCode = parseInt(route["secondaryStatusCode"]);
+            const sfOpCode = parseInt(route["opCode"]);
+            const status = getStatus(sfStatusCode, sfOpCode);
+            const event: Event = new Event();
+            event.eventId = "ev_" + await jsonToMd5(route);
+            event.operatorCode = "sfex";
+            event.trackingNum = routeResp["mailNo"];
+            event.status = status;
+            event.what = CodeDesc.getDesc(status);
+            // acceptTime format: 2024-10-26 06:12:43
+            const acceptTime: string = route["acceptTime"];
+            // convert to isoStringWithTimezone : "2024-10-26T06:12:43+08:00"
+            event.when = acceptTime.replace(" ", "T") + "+08:00";
+            event.where = route["acceptAddress"];
+            event.whom = "SFEx";
+            event.notes = route["remark"];
+            event.dataProvider = "SF Express";
+            event.extra = {
+                lastUpdateMethod: updateMethod,
+                lastUpdateTime: new Date().toISOString(),
+            };
+            event.sourceData = route;
+            entity.addEvent(event);
+        }
+        return entity;
+    }
+
+}

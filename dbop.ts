@@ -165,6 +165,7 @@ export async function queryStatus(
     if (result.rows.length == 1) {
         const row = result.rows[0];
         return {
+            id: trackingID.toString(),
             status: row[0] as number,
             what: row[1] as string
         }

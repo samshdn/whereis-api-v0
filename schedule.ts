@@ -25,18 +25,18 @@ async function syncRoutes() {
 
         client.queryObject("BEGIN");
         // for (const inProcessTrackingNum of inProcessTrackingNums) {
-        for (const [key, value] of Object.entries(inProcessTrackingNums)) {
-            const [error, trackingID] = TrackingID.parse(key);
+        for (const [id, params] of Object.entries(inProcessTrackingNums)) {
+            const [error, trackingID] = TrackingID.parse(id);
             if (trackingID === undefined) {
                 continue;
             }
 
-            const entity = await requestWhereIs(trackingID, value, "auto-pull");
+            const entity = await requestWhereIs(trackingID, params, "auto-pull");
             if (entity === undefined) continue;
 
             const eventIds: string[] = await queryEventIds(
                 client,
-                key,
+                id,
             );
             if (entity.eventNum() > eventIds.length) {
                 // update the entity
