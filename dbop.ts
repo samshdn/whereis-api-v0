@@ -1,3 +1,9 @@
+/**
+ * This file encapsulates database operations related to the application layer.
+ * It provides a set of functions and utilities to interact with the database,
+ * implement CRUD operations for application-specific entities.
+ */
+
 import { PoolClient } from "https://deno.land/x/postgres@v0.19.3/mod.ts";
 import { Entity, Event, TrackingID } from "./model.ts";
 
@@ -5,6 +11,7 @@ import { Entity, Event, TrackingID } from "./model.ts";
  * Insert entity and events into table
  * @param client PoolClient
  * @param entity Entity object with events
+ * @returns {Promise<number | undefined>} A promise that resolves to the number of affected rows on success, or undefined if the operation fails.
  */
 export async function insertEntity(
     client: PoolClient,
@@ -27,7 +34,7 @@ export async function insertEntity(
         entity.params,
     ];
 
-    // 执行插入操作
+    // Insert into DB table
     const result = await client.queryObject(insertQuery, values);
 
     if (result.rowCount == 1 && entity.events != undefined) {
@@ -39,6 +46,13 @@ export async function insertEntity(
     return result?.rowCount;
 }
 
+/**
+ * Update existing entity record & append new event data to event table
+ * @param client - PoolClient
+ * @param entity - Entity object with updated event(s)
+ * @param eventIds - Existing eventIDs
+ * @returns {Promise<number | undefined>} A promise that resolves to the number of affected rows on success, or undefined if the operation fails.
+ */
 export async function updateEntity(
     client: PoolClient,
     entity: Entity,
@@ -60,7 +74,6 @@ export async function updateEntity(
             if (
                 event.eventId !== undefined && eventIds.includes(event.eventId)
             ) continue;
-            console.log(event.eventId);
             await insertEvent(client, event);
         }
     }
@@ -71,6 +84,7 @@ export async function updateEntity(
  * Insert one event data into table
  * @param client PoolClient
  * @param event Event object
+ * @returns {Promise<number | undefined>} A promise that resolves to the number of affected rows on success, or undefined if the operation fails.
  */
 async function insertEvent(
     client: PoolClient,
@@ -107,13 +121,18 @@ async function insertEvent(
         event.operatorCode,
     ];
 
-    // 执行插入操作
+    // Insert into DB table
     const result = await client.queryObject(insertQuery, values);
 
     return result?.rowCount;
 }
 
-// 按 tracking_num 查询数据
+/**
+ * Query entity from DB by trackingID
+ * @param client PoolClient
+ * @param trackingID
+ * @return {Promise<Entity | undefined>} A promise that resolves to the entity object if found, or undefined.
+ */
 export async function queryEntity(
     client: PoolClient,
     trackingID: TrackingID,
@@ -149,6 +168,12 @@ export async function queryEntity(
     return entity;
 }
 
+/**
+ * Query status by trackingID
+ * @param client
+ * @param trackingID
+ * @returns {Promise<Record<string, any> | undefined>} A promise that resolves to JSON object if found, or undefined.
+ */
 export async function queryStatus(
     client: PoolClient,
     trackingID: TrackingID,
@@ -167,14 +192,19 @@ export async function queryStatus(
         return {
             id: trackingID.toString(),
             status: row[0] as number,
-            what: row[1] as string
-        }
+            what: row[1] as string,
+        };
     }
 
     return undefined;
 }
 
-// 按 tracking_num 查询数据
+/**
+ * Query events by trackingID
+ * @param client
+ * @param trackingID
+ * @returns {Promise<Event[]>} A promise that resolves to object event array
+ */
 async function queryEvents(
     client: PoolClient,
     trackingID: TrackingID,
@@ -226,15 +256,22 @@ async function queryEvents(
     return events;
 }
 
+/**
+ * Query eventIDs by trackingID
+ * @param client
+ * @param trackingID
+ * @returns {Promise<string[]>} A promise resolves to event id array
+ */
 export async function queryEventIds(
     client: PoolClient,
-    eTrackingNum: string,
+    trackingID: TrackingID,
 ): Promise<string[]> {
     const eventIds: string[] = [];
     const result = await client.queryArray`
         SELECT event_id
         FROM events
-        WHERE tracking_num = ${eTrackingNum};
+        WHERE operator_code = ${trackingID.carrier}
+          AND tracking_num = ${trackingID.trackingNum};
     `;
 
     for (const row of result.rows) {
@@ -243,20 +280,23 @@ export async function queryEventIds(
     return eventIds;
 }
 
+/**
+ * Get in-procesing tracking numbers
+ * @param client
+ * @returns {Promise<Record<string, any>>} A promise resolves to JSON object
+ */
 export async function getInProcessingTrackingNums(
     client: PoolClient,
 ): Promise<Record<string, any>> {
-    // const trackingNums: string[] = [];
     const trackingNums: Record<string, any> = {};
     const result = await client.queryArray`
-            SELECT id, params
-            FROM entities
-            WHERE completed = false;
-        `;
+        SELECT id, params
+        FROM entities
+        WHERE completed = false;
+    `;
 
     for (const row of result.rows) {
         trackingNums[row[0] as string] = row[1];
-        // trackingNums.push(row[0] as string);
     }
 
     return trackingNums;
