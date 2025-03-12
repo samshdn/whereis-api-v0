@@ -1,3 +1,18 @@
+/**
+ * @fileoverview SF Express (Sfex) API client for tracking shipments and converting route data.
+ * This module provides functionality to interact with the SF Express API, retrieve shipment routes,
+ * and convert them into a structured `Entity` object with associated `Event` details.
+ * @module Sfex
+ * @requires axios
+ * @requires node:crypto
+ * @requires ./logger.ts
+ * @requires ./model.ts
+ * @requires ./util.ts
+ * @author Sam
+ * @version 1.0.0
+ * @date 2025-02-28
+ */
+
 import axios from "axios";
 
 import { createHash } from "node:crypto";
@@ -5,8 +20,70 @@ import { logger } from "./logger.ts";
 import { CodeDesc, Entity, Event } from "./model.ts";
 import { jsonToMd5 } from "./util.ts";
 
+/**
+ * SF Express API client class for tracking shipments and managing route data.
+ */
 export class Sfex {
 
+    /**
+     * Mapping of SF Express status codes and operation codes to internal event codes.
+     * @private
+     * @static
+     * @type {Record<string, Record<string, number>>}
+     */
+    private static eventCodeMap: Record<string, Record<string, number>> = {
+        "101": {
+            "54": 3100,     // Received by Carrier
+        },
+        "201": {
+            "30": 3001,     // Logistics In-Progress
+            "31": 3002,     // Arrived
+            "36": 3004,     // Departed
+            "105": 3250,    // In-Transit
+            "106": 3300,    // Arrived At Destination
+            "310": 3002,    // Customs Clearance: Import Released
+        },
+        "204": {
+            "605": 3350,    // Customs Clearance: Import In-Progress
+        },
+        "301": {
+            "44": 3001,     // Logistics In-Progress
+            "204": 3450,    // Final Delivery In-Progress
+        },
+        "1301": {
+            "70": 3300,     // Arrived At Destination
+        },
+        "401": {
+            "80": 3500,     // Delivered
+        }
+    };
+
+    /**
+     * Retrieves the internal event code based on SF Express status and operation codes.
+     * @static
+     * @param {string} statusCode - The SF Express status code.
+     * @param {string} opCode - The SF Express operation code.
+     * @returns {number} The corresponding internal event code, or -1 if not found.
+     */
+    static getEventCode(
+        statusCode: string,
+        opCode: string,
+    ): number {
+        if (statusCode in Sfex.eventCodeMap) {
+            return Sfex.eventCodeMap[statusCode][opCode];
+        }
+        return -1;
+    }
+
+    /**
+     * Queries the location and status of a shipment using its tracking number.
+     * @static
+     * @async
+     * @param {string} trackingNum - The tracking number of the shipment.
+     * @param {Record<string, string>} extraParams - Additional parameters, including phone number.
+     * @param {string} updateMethod - The method used to update the tracking information.
+     * @returns {Promise<Entity | undefined>} A promise that resolves to an `Entity` object or undefined if no data is found.
+     */
     static async whereIs(
         trackingNum: string,
         extraParams: Record<string, string>,
@@ -45,9 +122,13 @@ export class Sfex {
     }
 
     /**
-     * Retrieve shipment details from SF Express
-     * @param {string} trackingNumber - The tracking number for the shipment
-     * @param phoneNo - The phone NO related to the package
+     * Retrieves shipment route details from the SF Express API.
+     * @static
+     * @async
+     * @param {string} trackingNumber - The tracking number for the shipment.
+     * @param {string} phoneNo - The phone number associated with the shipment.
+     * @returns {Promise<Record<string, any>>} A promise that resolves to the raw API response data.
+     * @throws {Error} If the API request fails or an error occurs during fetching.
      */
     static async getRoute(
         trackingNumber: string,
@@ -92,51 +173,23 @@ export class Sfex {
         }
     }
 
+    /**
+     * Converts raw SF Express route data into a structured `Entity` object with events.
+     * @private
+     * @static
+     * @async
+     * @param {string} trackingNum - The tracking number of the shipment.
+     * @param {Record<string, any>} result - The raw API response data.
+     * @param {Record<string, string>} params - Additional parameters for the entity.
+     * @param {string} updateMethod - The method used to update the tracking information.
+     * @returns {Promise<Entity | undefined>} A promise that resolves to an `Entity` object or undefined if no routes are found.
+     */
     private static async convert(
         trakingNum: string,
         result: Record<string, any>,
         params: Record<string, string>,
         updateMethod: string,
     ): Promise<Entity | undefined> {
-        const getStatus = (statusCode: number, opCode: number): number => {
-            if (statusCode === 101) {
-                return 3100;
-            } else if (statusCode === 201) {
-                // todo...review opCode 30
-                if (opCode === 30) {
-                    return 3001;
-                } else if (opCode === 31) {
-                    return 3002; // arrived
-                } else if (opCode === 36) {
-                    return 3004; // Departed
-                } else if (opCode === 105) {
-                    return 3250; // In-Transit
-                } else if (opCode === 106) {
-                    return 3300; // Arrived At Destination
-                } else if (opCode === 310) {
-                    return 3002; // Arrived
-                }
-            } else if (statusCode === 204) {
-                if (opCode === 605) {
-                    return 3350; // Customs Clearance: Import In-Progress
-                }
-            } else if (statusCode === 301) {
-                if (opCode === 44) {
-                    return 3001; // Logistics In-Progress
-                } else if (opCode === 204) {
-                    return 3450; // Final Delivery In-Progress
-                }
-            } else if (statusCode === 401) {
-                if (opCode === 80) {
-                    return 3500; // Delivered
-                }
-            } else if (statusCode === 1301) {
-                if (opCode === 70) {
-                    return 3300; // Arrived At Destination
-                }
-            }
-            return 0;
-        };
         const apiResult = JSON.parse(result["apiResultData"]);
         const routeResp = apiResult["msgData"]["routeResps"][0];
         const routes: [] = routeResp["routes"];
@@ -155,11 +208,15 @@ export class Sfex {
         for (let i = 0; i < routes.length; i++) {
             const route = routes[i];
 
-            const sfStatusCode = parseInt(route["secondaryStatusCode"]);
-            const sfOpCode = parseInt(route["opCode"]);
-            const status = getStatus(sfStatusCode, sfOpCode);
+            const sfStatusCode = route["secondaryStatusCode"];
+            const sfOpCode = route["opCode"];
+            const status = Sfex.getEventCode(sfStatusCode, sfOpCode);
             const event: Event = new Event();
-            event.eventId = "ev_" + await jsonToMd5(route);
+
+            const eventId = "ev_" + await jsonToMd5(route);
+            if (entity.isEventIdExist(eventId)) continue;
+
+            event.eventId = eventId;
             event.operatorCode = "sfex";
             event.trackingNum = routeResp["mailNo"];
             event.status = status;

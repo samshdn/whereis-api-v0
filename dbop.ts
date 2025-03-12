@@ -1,11 +1,47 @@
 /**
- * This file encapsulates database operations related to the application layer.
- * It provides a set of functions and utilities to interact with the database,
- * implement CRUD operations for application-specific entities.
+ * @fileoverview Database operations module for application layer persistence.
+ * This module provides a comprehensive set of functions to manage CRUD operations
+ * (Create, Read, Update, Delete) for entities and their associated events in a
+ * PostgreSQL database. It handles entity tracking, event logging, and status
+ * querying using the Deno PostgreSQL client.
+ *
+ * @module database
+ * @requires PoolClient from "https://deno.land/x/postgres@v0.19.3/mod.ts"
+ * @requires Entity, Event, TrackingID from "./model.ts"
+ * @requires logger from "./logger.ts"
+ *
+ * @description
+ * The module encapsulates database interactions for:
+ * - Entity management (insert, update, query)
+ * - Event tracking (insert, query)
+ * - Status monitoring
+ * - Tracking number management
+ *
+ * Key features:
+ * - Asynchronous operations with Promise-based returns
+ * - Type-safe database interactions
+ * - Error handling through try-catch blocks
+ * - Support for complex entity-event relationships
+ *
+ * @example
+ * ```typescript
+ * import { PoolClient } from "https://deno.land/x/postgres@v0.19.3/mod.ts";
+ * import { insertEntity } from "./database.ts";
+ *
+ * async function example(client: PoolClient, entity: Entity) {
+ *   const result = await insertEntity(client, entity);
+ *   console.log(`Affected rows: ${result}`);
+ * }
+ * ```
+ *
+ * @author Sam
+ * @version 1.0.0
+ * @date 2025-2-28
  */
 
 import { PoolClient } from "https://deno.land/x/postgres@v0.19.3/mod.ts";
 import { Entity, Event, TrackingID } from "./model.ts";
+import {logger} from "./logger.ts";
 
 /**
  * Insert entity and events into table
@@ -39,7 +75,14 @@ export async function insertEntity(
 
     if (result.rowCount == 1 && entity.events != undefined) {
         for (const event of entity.events) {
-            await insertEvent(client, event);
+            // console.log(
+            //     event.eventId + " " + event.sourceData?.['date']
+            // );
+            try {
+                await insertEvent(client, event);
+            } catch (e) {
+                logger.error(e);
+            }
         }
     }
 
@@ -229,7 +272,8 @@ async function queryEvents(
                data_provider
         FROM events
         WHERE operator_code = ${trackingID.carrier}
-          AND tracking_num = ${trackingID.trackingNum};
+          AND tracking_num = ${trackingID.trackingNum}
+        ORDER BY when_;
     `;
 
     for (const row of result.rows) {

@@ -1,3 +1,12 @@
+/**
+ * @file Server.ts
+ * @description Implements a Hono-based server for tracking package status and location information.
+ * Handles HTTP requests, database operations, and carrier API integrations with Bearer token authentication.
+ * @author Sam
+ * @version 1.0.0
+ * @date 2025-02-28
+ */
+
 import { Context, Hono, Next } from "hono";
 import { StatusCode } from "hono/utils/http-status";
 import { QueryArrayResult } from "https://deno.land/x/postgres/mod.ts";
@@ -17,21 +26,44 @@ import {
 declare module "hono" {
     // noinspection JSUnusedGlobalSymbols
     interface Context {
+        /**
+         * Sends an error response with specified error code and message
+         * @param errorCode - The error code in format "HTTPSTATUS-CODE"
+         * @returns Response object with JSON error payload
+         */
         sendError: (errorCode: string) => Response;
     }
 }
 
+/**
+ * Server class that manages HTTP endpoints for tracking services
+ */
 export class Server {
     private readonly port: number;
 
+    /**
+     * Creates a new Server instance
+     * @param port - The port number to run the server on
+     */
     constructor(port: number) {
         this.port = port;
     }
 
+    /**
+     * Verifies if the provided token is valid
+     * @param token - The Bearer token to verify
+     * @returns boolean indicating if token is valid
+     */
     verifyToken(token: string): boolean {
         return token == "eagle1";
     }
 
+    /**
+     * Extracts HTTP status code from error code string
+     * @param errorCode - Error code in format "HTTPSTATUS-CODE"
+     * @returns Numeric HTTP status code
+     * @throws Error if errorCode format is invalid
+     */
     getHttpCode(errorCode: string): number {
         const parts = errorCode.split("-");
         const httpStatusCode = Number(parts[0]);
@@ -43,6 +75,9 @@ export class Server {
         return httpStatusCode;
     }
 
+    /**
+     * Starts the HTTP server with configured routes
+     */
     start(): void {
         const app = new Hono();
 
@@ -80,6 +115,9 @@ export class Server {
 
         app.use("/v0/whereis/:id", customBearerAuth);
 
+        /**
+         * GET /v0/status/:id - Retrieves status for a tracking ID
+         */
         app.get("/v0/status/:id?", async (c) => {
             // Carrier-TrackingNumber
             const id = c.req.param("id") ?? "";
@@ -103,6 +141,10 @@ export class Server {
             }
         });
 
+        /**
+         * GET /v0/whereis/:id - Retrieves location information for a tracking ID
+         * Requires Bearer token authentication
+         */
         app.get("/v0/whereis/:id?", async (c) => {
             // Carrier-TrackingNumber
             const id = c.req.param("id") ?? "";
@@ -159,6 +201,9 @@ export class Server {
             }
         });
 
+        /**
+         * GET / - Root endpoint
+         */
         app.get("/", (c) => {
             throw new Error('Something went wrong!')
             // return c.html("<h3>Hello Eegle1!</h3>");
@@ -176,10 +221,19 @@ export class Server {
         Deno.serve({ port: this.port }, app.fetch);
     }
 
+    /**
+     * Stops the server (currently just logs message)
+     */
     stop(): void {
         console.log(`Server is stopping...`);
     }
 
+    /**
+     * Retrieves status for a tracking ID from DB or carrier
+     * @param trackingID - The tracking ID object
+     * @param queryParams - Additional query parameters
+     * @returns Status object or undefined if not found
+     */
     async getStatus(
         trackingID: TrackingID,
         queryParams: Record<string, string>,
@@ -220,6 +274,12 @@ export class Server {
         return status;
     }
 
+    /**
+     * Attempts to get entity from database first, then carrier if not found
+     * @param trackingID - The tracking ID object
+     * @param queryParams - Additional query parameters
+     * @returns Entity object or undefined if not found
+     */
     async getObjectFromDbFirst(
         trackingID: TrackingID,
         queryParams: Record<string, string>,
@@ -259,6 +319,12 @@ export class Server {
         return entity;
     }
 
+    /**
+     * Gets entity from carrier first and updates database
+     * @param trackingID - The tracking ID object
+     * @param queryParams - Additional query parameters
+     * @returns Entity object or undefined if not found
+     */
     async getObjectFromCarrierFirst(
         trackingID: TrackingID,
         queryParams: Record<string, string>,
@@ -280,7 +346,7 @@ export class Server {
             client = await connect();
             const eventIds: string[] = await queryEventIds(
                 client,
-                trackingID.toString(),
+                trackingID,
             );
             if (entity != undefined && entity.eventNum() > eventIds.length) {
                 // update the entity
@@ -302,6 +368,12 @@ export class Server {
         return entity;
     }
 
+    /**
+     * Extracts extra parameters based on carrier type
+     * @param req - The request object
+     * @param carrier - The carrier identifier
+     * @returns Record of extra parameters
+     */
     getExtraParams(req: any, carrier: string): Record<string, string> {
         if ("sfex" == carrier) {
             return { phonenum: req.query("phonenum") };

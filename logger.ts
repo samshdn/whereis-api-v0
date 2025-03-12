@@ -1,8 +1,25 @@
+/**
+ * @file Logger module for application-wide logging functionality
+ * @description Provides a configured Winston logger instance for consistent logging across the application
+ * @author Sam
+ * @date 2025-2-28
+ */
+
 import winston from 'winston';
 
-// instantiate a logger object
+/**
+ * A configured Winston logger instance
+ * @type {winston.Logger}
+ * @property {string} level - Log level set to 'info'
+ * @property {Object} format - Log format configuration
+ * @property {Object[]} transports - Log output destinations
+ */
 export const logger = winston.createLogger({
-    level: 'info', // level
+    /**
+     * The minimum level of messages to log
+     * @type {string}
+     */
+    level: 'info',
     format: winston.format.combine(
         winston.format.timestamp(), // timestamp
         winston.format.printf(({ timestamp, level, message }) => {
@@ -16,18 +33,3 @@ export const logger = winston.createLogger({
         new winston.transports.File({ filename: 'combined.log' })
     ]
 });
-
-// // 记录不同级别的日志
-// logger.info('This is an info message');
-// logger.warn('This is a warning message');
-// logger.error('This is an error message');
-//
-// // 你也可以记录带有元数据的日志
-// logger.info('User logged in', { userId: 123, username: 'john_doe' });
-//
-// // 记录错误
-// try {
-//     throw new Error('Something went wrong!');
-// } catch (error) {
-//     logger.error('An error occurred', { error });
-// }
