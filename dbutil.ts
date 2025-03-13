@@ -1,8 +1,8 @@
 /**
  * @file Database Connection Pool Module
  * @description Provides functions to initialize and manage PostgreSQL database connection pool
- * @author Sam
- * @version 1.0.0
+ * @author samshdn
+ * @version 0.1.1
  * @date 2025-02-28
   */
 import { Pool } from "https://deno.land/x/postgres/mod.ts";

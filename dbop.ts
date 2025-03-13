@@ -34,8 +34,8 @@
  * }
  * ```
  *
- * @author Sam
- * @version 1.0.0
+ * @author samshdn
+ * @version 0.1.1
  * @date 2025-2-28
  */
 

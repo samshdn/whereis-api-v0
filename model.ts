@@ -1,7 +1,7 @@
 /**
  * A singleton class for storing and retrieving key-value pairs where keys are numbers and values are strings.
- * @author Sam
- * @date 2025-2-28
+ * @author samshdn
+ * @version 0.1.1
  */
 export class CodeDesc {
     /** @private Singleton instance of CodeDesc */
@@ -51,8 +51,8 @@ export class CodeDesc {
 
 /**
  * A singleton class for managing error codes and their descriptions.
- * @author Sam
- * @date 2025-2-28
+ * @author samshdn
+ * @version 0.1.1
  */
 export class ErrorRegistry {
     /** @private Singleton instance of ErrorRegistry */
@@ -102,8 +102,8 @@ export class ErrorRegistry {
 /**
  * A tuple type representing the result of parsing a tracking ID string.
  * @typedef {[(string | undefined), (TrackingID | undefined)]} ParseResult
- * @author Sam
- * @date 2025-2-28
+ * @author samshdn
+ * @version 0.1.1
  */
 type ParseResult = [
     string | undefined,         // Error code if parsing fails
@@ -112,8 +112,8 @@ type ParseResult = [
 
 /**
  * A class representing a tracking ID with a carrier and tracking number.
- * @author Sam
- * @date 2025-2-28
+ * @author samshdn
+ * @version 0.1.1
  */
 export class TrackingID {
     carrier: string;
@@ -200,7 +200,8 @@ export class TrackingID {
 
 /**
  * A class representing an entity with associated events and metadata.
- * @author Sam
+ * @author samshdn
+ * @version 0.1.1
  * @date 2025-2-28
  */
 export class Entity {
@@ -397,7 +398,8 @@ export class Entity {
 
 /**
  * A class representing an event associated with an entity.
- * @author Sam
+ * @author samshdn
+ * @version 0.1.1
  * @date 2025-2-28
  */
 export class Event {

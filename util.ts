@@ -4,8 +4,8 @@
  * from JSON objects using Deno's crypto module.
  * @module JsonUtils
  * @requires crypto from "https://deno.land/std@0.200.0/crypto/mod.ts"
- * @author Sam
- * @version 1.0.0
+ * @author samshdn
+ * @version 0.1.1
  * @date 2025-02-28
  */
 

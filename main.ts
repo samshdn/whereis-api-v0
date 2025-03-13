@@ -2,8 +2,8 @@
  * Main code to execute.
  * This module serves as the entry point for the application, handling environment loading,
  * metadata initialization, database setup, scheduling, and server startup.
- * @author Sam
- * @date 2025-2-28
+ * @author samshdn
+ * @version 0.1.1
  */
 import { load } from "https://deno.land/std/dotenv/mod.ts";
 import { logger } from "./logger.ts";

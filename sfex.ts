@@ -8,8 +8,8 @@
  * @requires ./logger.ts
  * @requires ./model.ts
  * @requires ./util.ts
- * @author Sam
- * @version 1.0.0
+ * @author samshdn
+ * @version 0.1.1
  * @date 2025-02-28
  */
 

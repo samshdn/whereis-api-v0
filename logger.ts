@@ -1,8 +1,8 @@
 /**
  * @file Logger module for application-wide logging functionality
  * @description Provides a configured Winston logger instance for consistent logging across the application
- * @author Sam
- * @date 2025-2-28
+ * @author samshdn
+ * @version 0.1.1
  */
 
 import winston from 'winston';

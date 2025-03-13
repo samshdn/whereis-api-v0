@@ -4,8 +4,8 @@
  * query their latest status, and update the database accordingly. It handles
  * database transactions and error logging to ensure data consistency.
  *
- * @author Sam
- * @version 1.0.0
+ * @author samshdn
+ * @version 0.1.1
  * @date 2025-02-28
  */
 import cron from "node-cron";
